@@ -1,0 +1,6 @@
+streamlit
+langchain
+pypdf
+huggingface-hub
+python-dotenv
+json-repair

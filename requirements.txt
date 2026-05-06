@@ -1,6 +1,5 @@
 streamlit
-langchain
+google-generativeai
 pypdf
-huggingface-hub
-python-dotenv
-json-repair
+pandas
+pydantic

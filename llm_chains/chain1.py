@@ -1,45 +1,51 @@
 import os
 import json
 import streamlit as st
-from huggingface_hub import AsyncInferenceClient
-from json_repair import repair_json
-
-def get_async_hf_client() -> AsyncInferenceClient:
-    """Safely fetch the token and return an asynchronous client."""
-    token = os.getenv("HF_TOKEN")
+import google.generativeai as genai
+def get_gemini_model():
+    """Returns the latest stable Gemini 2.5 Flash model."""
+    token = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
     if not token:
-        try:
-            token = st.secrets["HF_TOKEN"]
-        except (FileNotFoundError, KeyError):
-            raise ValueError("HF_TOKEN not found in environment or Streamlit secrets.")
-            
-    return AsyncInferenceClient(model="Qwen/Qwen2.5-7B-Instruct", token=token)
+        raise ValueError("GEMINI_API_KEY not found.")
+    
+    genai.configure(api_key=token)
+    
+    # Update this string to match the latest flash model in your list
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 async def chain1_extract_fields(hr_input: str) -> list:
-    """Asynchronously extracts required fields from the HR input."""
-    client = get_async_hf_client()
+    """Asynchronously extracts 3-12 required fields from HR input for CV screening."""
+    model = get_gemini_model()
     
-    # We MUST 'await' the network call so the thread isn't blocked
-    response = await client.chat.completions.create(
-        messages=[
-            {
-                "role": "system", 
-                "content": "You are an expert HR analyst. Your ONLY output is a valid JSON array of strings."
-            },
-            {
-                "role": "user", 
-                "content": f"Extract 3-12 core CV evaluation fields based on these HR requirements.\n\nRequirements:\n{hr_input}\n\nJSON Array ONLY:"
-            }
-        ], 
-        max_tokens=300, 
-        temperature=0.1
-    )
+    prompt = f"""You are an expert HR analyst. Analyze the job requirements below and 
+    extract a list of 3 to 12 specific fields or criteria to verify in a candidate's CV.
+    
+    Return ONLY a JSON array of strings.
+    
+    Requirements:
+    \"\"\"{hr_input}\"\"\"
+    
+    JSON Array:"""
     
     try:
-        # json_repair handles any markdown fences natively
-        parsed_data = json.loads(repair_json(response.choices[0].message.content))
-        if not isinstance(parsed_data, list):
-            raise ValueError("LLM did not return a list.")
-        return parsed_data
+        # Utilizing generate_content_async for non-blocking I/O
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                response_mime_type="application/json", # Forces JSON output natively
+                temperature=0.1
+            )
+        )
+        
+        # Parse the JSON string directly into a Python list
+        fields = json.loads(response.text)
+        
+        if not isinstance(fields, list):
+            raise ValueError("LLM output is not a valid list.")
+            
+        return fields
+        
     except Exception as e:
-        raise ValueError(f"Failed to parse LLM output into JSON array: {e}")
+        # Provides clear error feedback in the Streamlit UI
+        raise ValueError(f"Chain 1 Error: {str(e)}")
+

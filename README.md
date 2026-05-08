@@ -1,5 +1,4 @@
-# 🤖 CV Analyzer — HR Match System
-
+# 🤖 CV Analyzer — HR Match System (not runnable
 > Automatically analyze and rank multiple CVs against HR requirements using LLM-powered chains.
 
 ---
